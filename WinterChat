@@ -1,0 +1,175 @@
+public class Main {
+    public Main() {   }
+    public static void main(String[] args) {
+        new Server();
+    }
+}
+public class Server {
+
+    private Vector<ClientHadnler> clients = new Vector<>();
+    public Server() {
+        ServerSocket server = null;
+        Socket socket = null;
+        try {
+            server = new ServerSocket(8123);
+            System.out.println("Сервер запущен. Ожидаем клиентов");
+            while (true) {
+                socket = server.accept();
+                System.out.println("Клиент подключился");
+                subscribe(new ClientHadnler(this, socket));
+               // this.clients.add(new ClientHadnler(this, socket));
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                socket.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            try {
+                server.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+    public void broadcastMsg(String msg) {
+        for (ClientHadnler o : clients
+                ) {
+            o.sendMsg(msg);
+        }
+    }
+    public void subscribe(ClientHadnler client)
+    {
+        clients.add(client);
+    }
+    public void unsubscribe(ClientHadnler client) {
+        clients.remove(client);
+    }
+}
+public class Main extends Application {
+
+    @Override
+    public void start(Stage primaryStage) throws Exception{
+        Parent root = FXMLLoader.load(getClass().getResource("client.fxml"));
+        primaryStage.setTitle("WinterChat");
+        primaryStage.setScene(new Scene(root, 400, 400));
+        primaryStage.show();
+    }
+
+
+    public static void main(String[] args) {
+        launch(args);
+    }
+}
+public class Controller implements Initializable {
+
+    @FXML
+    TextArea chatArea;
+
+    @FXML
+    TextField msgField;
+    Socket socket;
+    DataInputStream in;
+    DataOutputStream out;
+    final String IP_ADDRESS = "localhost";
+    final int PORT = 8123;
+
+    public Controller(){}
+    public void initialize(URL location, ResourceBundle resources) {
+        try {
+            this.socket = new Socket(IP_ADDRESS, PORT);
+            in = new DataInputStream(socket.getInputStream());
+            out = new DataOutputStream(socket.getOutputStream());
+            new Thread(() -> {
+                    try {
+                        while (true) {
+                        String str = in.readUTF();
+                        if (str.equals("/serverclosed")) break;
+                            chatArea.appendText(str + "/n");
+                        }
+                    } catch (IOException var1) {
+                        var1.printStackTrace();
+                    } finally {
+                        try {
+                            socket.close();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
+            }).start();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+ public void sendMsg() {
+        try {
+            out.writeUTF(msgField.getText());
+            msgField.clear();
+            msgField.requestFocus();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+}
+public class ClientHadnler {
+    private Server server;
+    private Socket socket;
+    private DataOutputStream out;
+    private DataInputStream in;
+
+    public ClientHadnler(Server server, Socket socket) {
+        try {
+            this.socket = socket;
+            this.server = server;
+            this.in = new DataInputStream(socket.getInputStream());
+            this.out = new DataOutputStream(socket.getOutputStream());
+            new Thread(() -> {
+                try {
+                    while (true) {
+                        String str = in.readUTF();
+                        if (str.equals("/end")) {
+                            out.writeUTF("/serverclosed");
+                            break;
+                        }
+                        server.broadcastMsg(str);
+                        System.out.println("Client: " + str);
+                    }
+                }
+                catch (IOException e) {
+                        e.printStackTrace();
+                    } finally {
+                        try {
+                            in.close();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                        try {
+                            out.close();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                        try {
+                            socket.close();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                        server.unsubscribe(this);
+                   }
+            }).start();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+        public void sendMsg (String msg){
+            try {
+                out.writeUTF(msg);
+            }catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
